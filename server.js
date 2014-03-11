@@ -13,7 +13,7 @@ if (config.usehosts) {
         hosts.forEach(function(host) {
             if (!host.startsWith("#") && host !== '') {
                 host = host.replace(/\s+|\t/g, '|').split('|');
-                cache.put(host[1], {type: 'A', data: host[0]});
+                cache.put(host[1], {type: 'A', data: [host[0]]});
             }
         });
     });
@@ -39,13 +39,76 @@ function dnsserv(request, response) {
         type = dns.consts.qtypeToName(request.question[0].type),
         sourceIP = request.address.address;
 
+    var result = cache.get(name);
+    if (result && (result.type === type || ((type === 'A' || 'AAAA') && result.type === 'CNAME'))) {
 
+        sendresponse(response, name, result.type, result.data, result.ttl ? result.ttl - now() + result.updateTime : 0, result.prio);
+
+    }
+}
+
+function randomOrder() {
+    return (Math.round(Math.random()) - 0.5);
+}
+
+// ttl: result.ttl ? result.ttl - now() + result.updateTime : 0
+function sendresponse(response, name, type, data, ttl, prio) {
+    switch (type) {
+        case "A":
+            data.sort(randomOrder());
+            data.forEach(function(recdata) {
+                response.answer.push(dns.A({
+                    name: name,
+                    address: recdata,
+                    ttl: ttl || 0
+                }));
+            });
+            break;
+        case "AAAA":
+            data.sort(randomOrder());
+            data.forEach(function(recdata) {
+                response.answer.push(dns.AAAA({
+                    name: name,
+                    address: recdata,
+                    ttl: ttl || 0
+                }));
+            });
+            break;
+        case "CNAME":
+            data.sort(randomOrder());
+            data.forEach(function(recdata) {
+                response.answer.push(dns.CNAME({
+                    name: name,
+                    data: recdata,
+                    ttl: ttl || 0
+                }));
+            });
+            break;
+        case "MX":
+            data.sort(randomOrder());
+            data.forEach(function(recdata) {
+                response.answer.push(dns.MX({
+                    name: name,
+                    priority: prio,
+                    exchange: recdata,
+                    ttl: ttl || 0
+                }));
+            });
+            break;
+
+    }
+    response.send();
+}
+
+function now() {
+    return Math.floor((new Date).getTime()/1000);
 }
 
 function exitError(err) {
     console.log('Error detected:\n' + err + '\nWill now exit.');
     process.exit(1);
 }
+
 // http://stackoverflow.com/questions/646628/how-to-check-if-a-string-startswith-another-string
 if (typeof String.prototype.startsWith != 'function') {
     String.prototype.startsWith = function (str){
