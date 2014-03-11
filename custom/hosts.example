@@ -1,0 +1,4 @@
+# Custom hosts file, IPv4 ONLY
+
+# localhost
+127.0.0.1 localhost
